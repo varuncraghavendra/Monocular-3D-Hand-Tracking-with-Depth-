@@ -6,6 +6,12 @@ Submitted as the final project for **PRCV, Spring 2026** — *Varun Raghavendra,
 
 ---
 
+
+
+
+
+
+
 ## Overview
 
 The pipeline combines a strong 3D-hand baseline (InterNet, ECCV 2020) with three extensions that make it usable for robot teleoperation from a single RGB webcam:
