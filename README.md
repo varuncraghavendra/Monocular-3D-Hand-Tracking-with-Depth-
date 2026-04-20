@@ -6,7 +6,7 @@ Submitted as the final project for **PRCV, Spring 2026** — *Varun Raghavendra,
 
 ---
 
-![Alt text](Untitled design.gif)
+![Alt text](Untitled design.gif) 
 
 ## Overview
 
