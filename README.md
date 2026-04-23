@@ -4,7 +4,7 @@ Abstract : I have implemented a monocular webcam based 3D hand tracking and pose
 
 Submitted as the final project for **PRCV, Spring 2026** — *Varun Raghavendra, MS Robotics, Northeastern University Boston.*
 
-Video Link : 
+Video Link : https://www.youtube.com/watch?v=z-NRJKBeH-Q
 ---
 
 ![Alt text](Untitled.gif) 
