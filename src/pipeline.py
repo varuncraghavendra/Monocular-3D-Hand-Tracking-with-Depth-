@@ -1,9 +1,6 @@
-"""Real-time 3D hand tracking pipeline for robot learning.
-
-Wires all stages together: threaded camera -> DA2 depth -> MMPose InterNet ->
-1 Euro filter -> gesture abstraction, with a live OpenCV overlay, a Matplotlib
-3D preview, and a session report saved on exit.
-"""
+# Varun Raghavendra
+# PRCV Spring 2026
+# End-to-end real-time 3D hand tracking pipeline wiring camera, DA2 depth, InterNet pose, 1 Euro filter, and gesture abstraction
 
 import os, time, datetime
 from collections import defaultdict
@@ -71,8 +68,8 @@ class SessionStats:
         self.normal_z_log = [[], []]
 
     def update(self, fps: float, hands: list, metas: list, depth_vals: list):
-        # Called once per frame. hands/metas/depth_vals are same-order lists
-        # indexed by hand slot (0=right, 1=left).
+        # Appends per-frame FPS, gesture labels, depth values, and feature scalars to their respective logs.
+        # Indexed by hand slot (0=right, 1=left).
         t = time.time() - self.t_start
         self.total_frames += 1
         self.fps_log.append(fps)
@@ -104,6 +101,7 @@ class SessionStats:
 
     @staticmethod
     def _gesture_dwell(log):
+        # Computes total dwell time per gesture label and counts label transitions.
         if not log:
             return {g: 0.0 for g in SessionStats.GESTURES}, 0
         dwell = defaultdict(float)
@@ -120,6 +118,7 @@ class SessionStats:
 
     @staticmethod
     def _depth_stats(log):
+        # Returns a dict of mean, std, min, and max depth values from the log, or None if empty.
         if not log:
             return None
         vals = [v for _, v in log]
@@ -131,8 +130,7 @@ class SessionStats:
         }
 
     def save_report(self, out_dir: str = "."):
-        # Build a single PNG with session summary, FPS timeline, per-hand
-        # gesture timelines, depth timelines, and pinch-distance timelines.
+        # Renders and saves a multi-panel PNG session report with FPS, gesture timelines, depth, and pinch plots.
         duration  = time.time() - self.t_start
         det_rate  = self.det_frames / max(self.total_frames, 1) * 100
         mean_fps  = float(np.mean(self.fps_log)) if self.fps_log else 0
@@ -242,11 +240,11 @@ class SessionStats:
         fig.savefig(str(out), dpi=150, bbox_inches="tight",
                     facecolor=fig.get_facecolor())
         plt.close(fig)
-        print(f"Session report saved to: {out}")
         self._print_terminal_summary(duration, det_rate, mean_fps)
         return str(out)
 
     def _dwell_and_trans(self, slot):
+        # Computes dwell time per gesture and transition count for a given hand slot.
         log = self.gesture_log[slot]
         if not log:
             return {g: 0.0 for g in self.GESTURES}, 0
@@ -261,6 +259,7 @@ class SessionStats:
 
     @staticmethod
     def _plot_gesture_timeline(ax, log, title):
+        # Draws a horizontal bar gesture timeline and attaches a colour legend to the axes.
         _col = _GESTURE_COL_MPL
         gestures = SessionStats.GESTURES
         if not log:
@@ -284,6 +283,7 @@ class SessionStats:
         ax.set_facecolor("#0f0f1a")
 
     def _print_terminal_summary(self, duration, det_rate, mean_fps):
+        # Prints a formatted session summary table to stdout including per-hand dwell times and depth stats.
         print("")
         print("Session summary")
         print("---------------")
@@ -341,18 +341,19 @@ class RobotLearningHandPipeline:
         self.stats = SessionStats()
 
     def _tick(self):
-        # Exponential moving average FPS counter.
+        # Updates and returns the EMA frame rate using the elapsed time since the last call.
         now = time.time(); dt = now - self.last_t; self.last_t = now
         if dt > 1e-6:
             self.fps = (1/dt) if self.fps == 0 else (0.8*self.fps + 0.2/dt)
         return self.fps
 
     def _visible(self, sc):
+        # Returns True if the mean score and the fraction of joints above threshold both exceed their minimums.
         return (float(np.mean(sc)) >= _MEAN_THR and
                 float(np.mean(sc > _JOINT_THR)) >= _FRAC_THR)
 
     def _draw_skeleton(self, frame, kp2d, sc):
-        # Draw five finger chains in distinct colours plus a grey palm polyline.
+        # Draws the five finger chains in distinct colours and a grey palm polyline on the frame.
         for fi, chain in enumerate(FINGER_CHAINS_IDX):
             col = _BGR[fi]
             pts = [(int(round(kp2d[j,0])), int(round(kp2d[j,1])))
@@ -369,8 +370,8 @@ class RobotLearningHandPipeline:
                          _PALM_BGR, 1, cv2.LINE_AA)
 
     def _draw_depth_display(self, frame, slot, kp2d, sc, depth_map):
-        # Anchored depth readout above each palm with a colour-graded bar.
-        # Suffix 'm*' = uncalibrated, 'm' = calibrated.
+        # Renders a colour-graded depth readout badge anchored above the palm centroid.
+        # Returns the sampled depth in metres, or None if no palm joints are visible.
         palm = [20, 7, 11, 15, 19]
         v    = [j for j in palm if sc[j] > _JOINT_THR]
         if not v:
@@ -424,6 +425,7 @@ class RobotLearningHandPipeline:
         return d
 
     def _draw_gesture_label(self, frame, slot, kp2d, sc, label, meta):
+        # Draws a semi-transparent gesture label badge near the wrist with confidence and feature stats.
         if sc[WRIST] > _JOINT_THR:
             ax_, ay_ = kp2d[WRIST]
         else:
@@ -454,6 +456,7 @@ class RobotLearningHandPipeline:
                     cv2.FONT_HERSHEY_SIMPLEX, 0.38, (180,180,180), 1, cv2.LINE_AA)
 
     def _draw_digit_distances(self, frame, slot, kp2d, sc, meta):
+        # Draws coloured lines between the thumb tip and each fingertip with normalised distance labels.
         dists     = meta.get("digit_distances", {})
         thumb_tip = kp2d[FINGER_TIPS[0]]
         if sc[FINGER_TIPS[0]] < _JOINT_THR:
@@ -473,6 +476,7 @@ class RobotLearningHandPipeline:
                         cv2.FONT_HERSHEY_SIMPLEX, 0.30, lcol, 1, cv2.LINE_AA)
 
     def _draw_palm_orientation(self, frame, slot, kp2d, sc, palm_normal):
+        # Draws an arrowed palm normal vector projected onto the image plane from the palm centroid.
         palm = [20,7,11,15,19]
         v    = [j for j in palm if sc[j] > _JOINT_THR]
         if not v or np.allclose(palm_normal, 0): return
@@ -486,6 +490,7 @@ class RobotLearningHandPipeline:
                     cv2.FONT_HERSHEY_SIMPLEX, 0.30, col, 1, cv2.LINE_AA)
 
     def _draw_depth_inset(self, frame, depth):
+        # Renders a small colourised DA2 depth map inset in the bottom-left corner of the frame.
         col   = self.depth.colorize(depth)
         inset = cv2.resize(col, (140, 105))
         h     = frame.shape[0]
@@ -497,7 +502,7 @@ class RobotLearningHandPipeline:
                     (80,220,80) if self.calib_done else (180,180,180), 1)
 
     def _draw_session_overlay(self, frame):
-        # Running stats in the bottom-left corner above the depth inset.
+        # Draws running elapsed time, detection rate, and dominant per-hand gesture in the bottom-left.
         elapsed  = time.time() - self.stats.t_start
         det_rate = self.stats.det_frames / max(self.stats.total_frames, 1) * 100
         H, W     = frame.shape[:2]
@@ -518,6 +523,7 @@ class RobotLearningHandPipeline:
                         cv2.FONT_HERSHEY_SIMPLEX, 0.34, (160,160,160), 1)
 
     def _draw_legend(self, frame):
+        # Draws gesture colour swatches and labels in the top-right corner of the frame.
         H, W = frame.shape[:2]
         items = [("GRASP", _GESTURE_COL["GRASP"]),
                  ("OPEN PALM", _GESTURE_COL["OPEN PALM"]),
@@ -530,7 +536,7 @@ class RobotLearningHandPipeline:
                         cv2.FONT_HERSHEY_SIMPLEX,0.36,(200,200,200),1)
 
     def _draw_calib_ui(self, frame, hands):
-        # Show a 3-second countdown overlay; return palm keypoints when done.
+        # Overlays a 3-second calibration countdown and progress bar; returns palm keypoints when the timer expires.
         elapsed   = time.time() - self.calib_start
         remaining = max(0.0, CALIB_SECS - elapsed)
         H, W      = frame.shape[:2]
@@ -551,6 +557,7 @@ class RobotLearningHandPipeline:
         return None
 
     def _draw_hud(self, frame, n):
+        # Renders the bottom status bar showing FPS, hand count, calibration state, and key bindings.
         H, W = frame.shape[:2]
         cal  = "CAL" if self.calib_done else "UNCAL"
         cv2.putText(frame,
@@ -560,8 +567,7 @@ class RobotLearningHandPipeline:
                     (W-260,H-8),cv2.FONT_HERSHEY_SIMPLEX,0.36,(120,120,120),1)
 
     def _render_3d(self, hands_data, title):
-        # Render the current hand(s) as a 3D scatter + lines onto a Matplotlib
-        # canvas, then convert to a BGR numpy image for OpenCV display.
+        # Renders the current hand skeletons onto a Matplotlib 3D axes and returns a BGR numpy image.
         ax = self._ax; ax.cla()
         ax.set_facecolor("white")
         for pane in [ax.xaxis.pane,ax.yaxis.pane,ax.zaxis.pane]:
@@ -606,8 +612,8 @@ class RobotLearningHandPipeline:
         return cv2.cvtColor(cv2.resize(buf,(PLOT_W,PLOT_H)),cv2.COLOR_RGB2BGR)
 
     def run(self):
-        # Main loop: grab frame -> DA2 depth -> InterNet -> per-hand 1 Euro
-        # smoothing + gesture classification -> overlays -> 3D preview.
+        # Main loop: capture frame, run DA2 depth and InterNet pose, apply 1 Euro smoothing and gesture
+        # Cclassification, draw all overlays, and composite the 3D preview panel beside the camera feed.
         blank = self._render_3d([], "Prediction (0)")
 
         while True:
@@ -706,7 +712,6 @@ class RobotLearningHandPipeline:
                 self.depth.calib_scale = None
                 self.calib_done = self.calib_active = False
                 self.pose._depths = [None, None]
-                print("Depth calibration reset.")
 
         self.stats.save_report(out_dir=self.report_dir)
 

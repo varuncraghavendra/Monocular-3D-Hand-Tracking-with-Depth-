@@ -1,9 +1,6 @@
-"""MMPose InterNet backend (baseline).
-
-Runs InterNet (ResNet-50 + 3D heatmap head, ECCV 2020) on each frame,
-deduplicates overlapping detections, and assigns hands to left/right slots
-with EMA smoothing on centre / size / depth.
-"""
+# Varun Raghavendra
+# PRCV Spring 2026
+# MMPose InterNet backend for 3D hand keypoint inference with NMS deduplication
 
 from pathlib import Path
 import os
@@ -13,8 +10,8 @@ from mmpose.apis import init_model, inference_topdown
 
 
 def _find_mmpose_root() -> Path:
-    # Locate the mmpose repo root. Honours MMPOSE_ROOT env var, else walks up
-    # from this file looking for configs/hand_3d_keypoint/.
+    # Locates the mmpose repo root via MMPOSE_ROOT env var or by walking up from this file.
+    # Raises RuntimeError if neither the env var nor a configs/hand_3d_keypoint directory is found.
     env = os.environ.get("MMPOSE_ROOT")
     if env:
         root = Path(env).resolve()
@@ -45,8 +42,6 @@ class MMPoseHandBackend:
                            "/internet_res50_4xb16-20e_interhand3d-256x256.py")
         ckpt   = str(repo / "checkpoints/res50.pth")
 
-        # MMPose resolves _base_ config imports relative to cwd, so temporarily
-        # chdir into the repo root during init_model.
         _orig_cwd = os.getcwd()
         try:
             os.chdir(str(repo))
@@ -63,8 +58,8 @@ class MMPoseHandBackend:
         self._missing = [0, 0]
 
     def infer(self, frame_bgr: np.ndarray, depth_info: dict | None = None):
-        # Full inference step: run model, dedup, attach palm depth if calibrated
-        # DA2 is available, then match detections to left/right slots and update EMA.
+        # Runs the full inference pipeline: model forward pass, NMS dedup, depth attachment, and slot matching.
+        # Returns a list of hand dicts (up to two) with keypoints, scores, side, and palm depth.
         raw = self._run(frame_bgr)
         raw = _dedup(raw)
 
@@ -93,14 +88,15 @@ class MMPoseHandBackend:
         return [h for h in out if h is not None]
 
     def _run(self, frame_bgr: np.ndarray):
+        # Scales the frame by infer_scale, runs MMPose inference, and parses results into hand dicts.
         scaled  = cv2.resize(frame_bgr, None,
                              fx=self.infer_scale, fy=self.infer_scale)
         results = inference_topdown(self.model, scaled)
         return self._extract(results)
 
     def _extract(self, results):
-        # Parse MMPose results into a uniform list of hand dicts. InterNet may
-        # return 42 keypoints (both hands) or 21 (one hand) per result.
+        # Parses MMPose PredInstance results into a uniform list of hand dicts.
+        # Handles both 42-keypoint (two-hand) and 21-keypoint (one-hand) model outputs.
         hands  = []
         sc_min = self.score_thr * 0.5
         for res in results:
@@ -129,8 +125,7 @@ class MMPoseHandBackend:
         return hands
 
     def _match(self, raw: list) -> list:
-        # Assign detections to slot 0 (right) / slot 1 (left). First honour any
-        # hand_side label from the model, then fill remaining slots by best score.
+        # Assigns detections to slot 0 (right) and slot 1 (left) using hand_side labels then score-based fallback.
         out, used = [None, None], set()
         for j, h in enumerate(raw):
             slot = {"right": 0, "left": 1}.get(h["hand_side"])
@@ -154,8 +149,7 @@ class MMPoseHandBackend:
         return out
 
     def _slot_score(self, hand: dict, slot: int) -> float:
-        # Score = confidence penalised by distance from slot's last known centre
-        # and, if available, by depth discontinuity from the slot's last depth.
+        # Scores a detection for a slot using confidence penalised by spatial distance and depth discontinuity.
         conf = hand["mean_score"]
         if self._centers[slot] is None:
             return conf
@@ -170,7 +164,7 @@ class MMPoseHandBackend:
         return score
 
     def _ema(self, slot: int, hand: dict, alpha: float = 0.35):
-        # Update per-slot running estimates of centre, size, and palm depth.
+        # Updates the per-slot running EMA estimates of hand centre, bounding-box size, and palm depth.
         kp = hand["keypoints"][:, :2]
         nc = kp.mean(0)
         d  = kp.max(0) - kp.min(0)
@@ -190,6 +184,7 @@ class MMPoseHandBackend:
 
 
 def _mkhand(kp: np.ndarray, sc: np.ndarray, side: str) -> dict:
+    # Constructs a standardised hand dict with 21×3 keypoints, scores, mean score, side label, and null depth.
     if kp.shape[1] == 2:
         kp = np.concatenate([kp, np.zeros((21, 1), np.float32)], axis=1)
     return {"keypoints": kp[:, :3].copy(), "scores": sc.copy(),
@@ -198,6 +193,7 @@ def _mkhand(kp: np.ndarray, sc: np.ndarray, side: str) -> dict:
 
 
 def _iou(a, b) -> float:
+    # Computes the intersection-over-union of two axis-aligned bounding boxes.
     ax0, ay0, ax1, ay1 = a
     bx0, by0, bx1, by1 = b
     ix = max(0.0, min(ax1, bx1) - max(ax0, bx0))
@@ -209,7 +205,7 @@ def _iou(a, b) -> float:
 
 
 def _dedup(hands: list, thr: float = 0.5) -> list:
-    # NMS over hand bboxes: keep the higher-scoring detection when two overlap.
+    # Applies NMS over hand bounding boxes, keeping the higher-scoring detection when two overlap.
     if len(hands) <= 1:
         return hands
     boxes = [(*h["keypoints"][:, :2].min(0), *h["keypoints"][:, :2].max(0))

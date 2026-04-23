@@ -1,9 +1,6 @@
-"""Gesture Abstraction Layer (EXT 3).
-
-Classifies 21-keypoint hand poses into three semantic states: GRASP, OPEN PALM,
-PINCH. Uses Euclidean digit distances, a combined 2D+3D finger extension ratio,
-and the palm orientation normal.
-"""
+# Varun Raghavendra
+# PRCV Spring 2026
+# Classifies 21-keypoint hand poses into GRASP, OPEN PALM, or PINCH using finger extension ratios and digit distances
 
 from __future__ import annotations
 from collections import deque
@@ -28,13 +25,13 @@ _PALM_PINK_MCP = 19
 
 
 def _unit(v: np.ndarray) -> np.ndarray:
+    # Normalises a vector to unit length, returning the input direction safely near zero.
     n = np.linalg.norm(v)
     return v / max(n, 1e-9)
 
 
 def _palm_normal(kp: np.ndarray) -> np.ndarray:
-    # Palm-plane normal via cross product of two palm vectors (wrist->index MCP,
-    # wrist->pinky MCP). Sign depends on handedness.
+    # Computes the palm-plane normal via the cross product of wrist-to-index-MCP and wrist-to-pinky-MCP vectors.
     w  = kp[WRIST,          :3]
     vi = kp[_PALM_IDX_MCP,  :3] - w
     vp = kp[_PALM_PINK_MCP, :3] - w
@@ -56,9 +53,8 @@ class GestureAbstractor:
 
     def _extension_ratios(self, kp: np.ndarray, sc: np.ndarray,
                           score_thr: float) -> list[float | None]:
-        # For each non-thumb finger, compute max(2D pixel ratio, 3D ratio) of
-        # tip->wrist over MCP->wrist. Takes whichever axis carries the extension
-        # so both lateral and forward-facing openings are detected.
+        # Computes per-finger max(2D, 3D) tip-to-wrist over MCP-to-wrist extension ratios.
+        # Returns None for any finger whose tip or MCP score is below the threshold.
         wrist_2d = kp[WRIST, :2]
         wrist_3d = kp[WRIST, :3]
         ratios   = []
@@ -89,7 +85,8 @@ class GestureAbstractor:
 
     def _digit_distances(self, kp: np.ndarray, sc: np.ndarray,
                          score_thr: float) -> dict:
-        # Thumb-tip to each fingertip distance, normalised by palm width.
+        # Returns thumb-tip to each fingertip distance, normalised by palm width.
+        # Entries are None for any finger whose score is below the threshold.
         palm_w = np.linalg.norm(
             kp[_PALM_IDX_MCP, :2] - kp[_PALM_PINK_MCP, :2])
         palm_w = max(palm_w, 1e-3)
@@ -107,6 +104,7 @@ class GestureAbstractor:
 
     def _pinch_norm(self, kp: np.ndarray, sc: np.ndarray,
                     score_thr: float) -> float | None:
+        # Returns the thumb-to-index-tip distance normalised by palm width, or None if either score is low.
         if sc[FINGER_TIPS[0]] < score_thr or sc[FINGER_TIPS[1]] < score_thr:
             return None
         palm_w = np.linalg.norm(
@@ -118,8 +116,8 @@ class GestureAbstractor:
 
     def classify(self, keypoints: np.ndarray, scores: np.ndarray,
                  score_thr: float = 0.12) -> tuple[str, dict]:
-        # State machine priority: PINCH > OPEN PALM > GRASP. Uses per-frame
-        # streaks and majority-vote history to reduce label flicker.
+        # Classifies the current hand pose using a PINCH > OPEN PALM > GRASP priority state machine.
+        # Returns the majority-voted label from recent history and a metadata dict with raw features.
         kp = np.asarray(keypoints, dtype=np.float32)
         sc = np.asarray(scores,    dtype=np.float32)
 
@@ -174,7 +172,6 @@ class GestureAbstractor:
             self._open_streak = 0
             raw = "GRASP"
 
-        # Hysteresis: stay in OPEN PALM until a curl or pinch forces an exit.
         if self._current == "OPEN PALM" and not is_pinch and n_curled == 0:
             raw = "OPEN PALM"
 
