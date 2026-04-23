@@ -152,3 +152,4 @@ Teleoperated robotic manipulation, imitation learning from human demonstrations,
 - Yang et al., *Depth Anything V2* (NeurIPS 2024)
 - Casiez et al., *1 Euro Filter* (CHI 2012)
 - MMPose, OpenMMLab
+- LLM Assist : Understanding of concepts, code syntax, code structuring, integration strategy, report structuring, correcting grammatical issues, README.md
