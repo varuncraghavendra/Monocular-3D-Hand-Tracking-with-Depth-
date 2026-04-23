@@ -1,8 +1,7 @@
-"""Entry point for the Robot Learning Hand Pipeline.
+# Varun Raghavendra
+# PRCV Spring 2026
+# CLI entry point for the Robot Learning Hand Pipeline with argument parsing and session report export
 
-Keys in the GUI: c = calibrate, r = reset, ESC = quit. A session report PNG
-is written to --report-dir on exit.
-"""
 import argparse, sys
 from pathlib import Path
 
@@ -15,6 +14,7 @@ from src.pipeline import RobotLearningHandPipeline
 
 
 def main():
+    # Parses command-line arguments and launches the RobotLearningHandPipeline.
     parser = argparse.ArgumentParser(
         description="Robot Learning Hand Pipeline")
     parser.add_argument("--device",      default="cpu")
@@ -28,12 +28,6 @@ def main():
                         default=str(PROJECT_ROOT),
                         help="directory to save session_report_*.png")
     args = parser.parse_args()
-
-    print(f"Project root : {PROJECT_ROOT}")
-    print(f"Depth model  : {args.depth_model}")
-    print(f"DA2 encoder  : {args.da2_encoder}")
-    print(f"Device       : {args.device}")
-    print(f"Report dir   : {args.report_dir}")
 
     pipeline = RobotLearningHandPipeline(
         device      = args.device,
