@@ -1,6 +1,6 @@
-# Robot Learning Hand Pipeline
+# Monocular Vision based 3D Hand Tracking and Pose Estimation pipeline for applications in robot learning and fine dexterous manipulation
 
-Real-time 3D hand pose estimation for robot learning, built on **MMPose InterNet** and **Depth Anything V2**. Runs on a single monocular webcam and outputs 21 joints per hand in absolute metric camera space, together with semantic gestures (`GRASP`, `OPEN PALM`, `PINCH`).
+Abstract : I have implemented a monocular webcam based 3D hand tracking and pose estimation pipeline built upon the MMPose library, optimized for robot learning through direct video demonstrations. MMPose is an open-source toolbox for pose estimation based on PyTorch. It is a part of the OpenMMLab project. Depth is obtained from Depth Anything V2 (NeuIPS 2024) 
 
 Submitted as the final project for **PRCV, Spring 2026** — *Varun Raghavendra, MS Robotics, Northeastern University Boston.*
 
